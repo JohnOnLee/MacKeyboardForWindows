@@ -25,57 +25,47 @@ if !Config["EnableRemapping"]
 ; We intercept Tab and detect if LWin (Physical Cmd) is held
 ; This allows correct behavior without making LWin a prefix key
 
+; ============ Safer Cmd+Tab Handling (Timer Based) ============
 $*Tab::{
     if GetKeyState("LWin", "P") {
-        ; Release the remapped Ctrl first
-        Send("{Blind}{LCtrl up}")
+        ; Release remapped Ctrl to avoid conflict
+        if GetKeyState("LCtrl") 
+            Send("{Blind}{LCtrl up}")
+            
+        ; If Alt is not yet down, press it down
+        if !GetKeyState("LAlt")
+            Send("{Blind}{SC038 down}")
+            
+        ; Send the Tab used for switching
+        Send("{Blind}{Tab}")
         
-        ; Start App Switcher (Alt+Tab)
-        Send("{Blind}{SC038 down}{Tab}")
-        
-        ; Wait for initial Tab release to prevent rapid cycling
-        KeyWait("Tab")
-        
-        ; Loop while Cmd is held to cycle through apps
-        while GetKeyState("LWin", "P") {
-            if GetKeyState("Tab", "P") {
-                if GetKeyState("Shift", "P")
-                    Send("{Blind}{Shift down}{Tab}{Shift up}")
-                else
-                    Send("{Blind}{Tab}")
-                
-                ; Wait for Tab release so we don't cycle too fast
-                KeyWait("Tab")
-            }
-            Sleep(10)
-        }
-        
-        ; Cmd released, close switcher
-        Send("{Blind}{SC038 up}")
+        ; Start a timer to check for Cmd release
+        SetTimer(CheckCmdRelease, 10)
         return
     }
     
     if GetKeyState("RWin", "P") {
-        Send("{Blind}{RCtrl up}")
-        Send("{Blind}{SC038 down}{Tab}")
-        KeyWait("Tab")
-        
-        while GetKeyState("RWin", "P") {
-            if GetKeyState("Tab", "P") {
-                if GetKeyState("Shift", "P")
-                    Send("{Blind}{Shift down}{Tab}{Shift up}")
-                else
-                    Send("{Blind}{Tab}")
-                KeyWait("Tab")
-            }
-            Sleep(10)
-        }
-        Send("{Blind}{SC038 up}")
+        if GetKeyState("RCtrl")
+            Send("{Blind}{RCtrl up}")
+            
+        if !GetKeyState("LAlt")
+            Send("{Blind}{SC038 down}")
+            
+        Send("{Blind}{Tab}")
+        SetTimer(CheckCmdRelease, 10)
         return
     }
     
-    ; Normal Tab behavior - pass through with modifiers
+    ; Normal Tab behavior
     Send("{Blind}{Tab}")
+}
+
+CheckCmdRelease() {
+    ; If neither Win key is held, cleanup and stop timer
+    if !GetKeyState("LWin", "P") && !GetKeyState("RWin", "P") {
+        Send("{Blind}{SC038 up}") ; Release Alt
+        SetTimer(CheckCmdRelease, 0) ; Stop timer
+    }
 }
 
 ; ============ Special Cmd+` handling ============
