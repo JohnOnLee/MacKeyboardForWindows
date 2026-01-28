@@ -7,6 +7,20 @@
 SendMode("Input")
 SetWorkingDir(A_ScriptDir)
 
+; ============ Run as Administrator ============
+if not A_IsAdmin
+{
+    try 
+    {
+        if A_IsCompiled
+            Run "*RunAs `"" A_ScriptFullPath "`""
+        else
+            Run "*RunAs `"" A_AhkPath "`" `"" A_ScriptFullPath "`""
+    }
+    ExitApp
+}
+
+
 ; Load configuration
 global Config := LoadConfig()
 
