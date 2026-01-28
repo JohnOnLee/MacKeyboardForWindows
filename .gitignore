@@ -1,0 +1,10 @@
+# User configuration
+config.ini
+
+# AutoHotkey artifacts
+*.upx
+*.exe
+
+# System
+Thumbs.db
+.DS_Store
