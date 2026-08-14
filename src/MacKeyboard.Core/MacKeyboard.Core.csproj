@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Platform-neutral on purpose. The remapper state machine must be testable on macOS,
+    so nothing in this project may reference Win32 or WinForms. The Windows-specific
+    layer lives in src/MacKeyboard.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Keeps the publish folder to just the exe, with symbols inside it. -->
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+</Project>

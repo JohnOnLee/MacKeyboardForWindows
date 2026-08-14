@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MacKeyboard.Core/MacKeyboard.Core.csproj" />
+    <Project Path="src/MacKeyboard/MacKeyboard.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MacKeyboard.Tests/MacKeyboard.Tests.csproj" />
+  </Folder>
+</Solution>

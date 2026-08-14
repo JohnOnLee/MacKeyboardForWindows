@@ -1,7 +1,13 @@
 # User configuration
 config.ini
 
-# AutoHotkey artifacts
+# Build output
+bin/
+obj/
+publish/
+*.user
+
+# Binaries
 *.upx
 *.exe
 

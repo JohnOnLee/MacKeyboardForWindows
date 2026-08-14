@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>MacKeyboard</AssemblyName>
+    <RootNamespace>MacKeyboard</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- The Rectangle engine needs real pixels from GetMonitorInfo, on every display. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+
+    <!-- Lets the Windows-only target framework build from macOS. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- Publish settings live here so `dotnet publish -c Release` is enough to get the shippable exe. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>embedded</DebugType>
+
+    <!--
+      Compressed rather than trimmed. Trimming would cut the exe further, but WinForms resolves a
+      great deal by reflection and a bad trim surfaces as a runtime crash on a path that was never
+      exercised — not something to ship without being able to run it on Windows first.
+      Compression removes no code at all.
+    -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MacKeyboard.Core/MacKeyboard.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="config.ini.example" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

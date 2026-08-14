@@ -1,0 +1,29 @@
+[General]
+; Show a notification when MacKeyboard starts
+ShowNotification=true
+; Write every physical and emitted key event to %LOCALAPPDATA%\MacKeyboard\input.log.
+; Turn this on if a key ever sticks — the log shows exactly which press was never released.
+Log=false
+
+[KeyRemapping]
+; Physical ⌘→Ctrl, ⌥→Win, ⌃→Alt. Turn off if another tool already remaps modifiers.
+EnableRemapping=true
+
+[MacShortcuts]
+; ⌘←/→ Home/End, ⌘Q quit, ⌘Delete, screenshots, and the rest of the Mac bindings
+EnableMacShortcuts=true
+; ⌘Tab held-to-cycle app switching
+EnableAltTab=true
+
+[WindowSwitcher]
+; ⌘` to cycle windows within the current app
+EnableWindowSwitcher=true
+; Apps to leave alone, comma separated, e.g. game,vmware
+Blacklist=
+
+[Rectangle]
+; Window management. Repeating a half command cycles 1/2 -> 2/3 -> 1/3.
+EnableRectangle=true
+; Rectangle  = Rectangle's own defaults (⌃⌥ based)
+; Spectacle  = Rectangle's "use Spectacle shortcuts" option (⌥⌘ based)
+Preset=Rectangle
