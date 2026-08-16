@@ -24,6 +24,13 @@ Blacklist=
 [Rectangle]
 ; Window management. Repeating a half command cycles 1/2 -> 2/3 -> 1/3.
 EnableRectangle=true
-; Rectangle  = Rectangle's own defaults (⌃⌥ based)
-; Spectacle  = Rectangle's "use Spectacle shortcuts" option (⌥⌘ based)
+;
+; Chords match the PHYSICAL Mac key, not what it is remapped to. The same key has three
+; names, so to be unambiguous:
+;   key printed 'control' = Windows calls it Ctrl = acts as Alt
+;   key printed 'option'  = Windows calls it Alt  = acts as Win
+;   key printed 'command' = Windows calls it Win  = acts as Ctrl
+;
+; Rectangle  = Rectangle's own defaults     — halves on control+option+arrow
+; Spectacle  = Rectangle's Spectacle option — halves on option+command+arrow
 Preset=Rectangle

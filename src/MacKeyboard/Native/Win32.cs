@@ -110,6 +110,11 @@ static class Win32
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int vKey);
 
+    public const uint MAPVK_VK_TO_VSC = 0;
+
+    [DllImport("user32.dll")]
+    public static extern uint MapVirtualKeyW(uint uCode, uint uMapType);
+
     /// <summary>
     /// Keys that must carry KEYEVENTF_EXTENDEDKEY. Without it the navigation cluster is delivered
     /// as its numpad twin, so ⌘← would type "4" with NumLock on.

@@ -64,13 +64,37 @@ sealed class InputSender(Action<string>? log = null)
         _buffer[n].u.ki = new Win32.KEYBDINPUT
         {
             wVk = (ushort)vk,
-            wScan = 0,
+            wScan = ScanCode(vk),
             dwFlags = flags,
             time = 0,
             dwExtraInfo = Win32.InjectedSignature,
         };
         n++;
     }
+
+    /// <summary>
+    /// The hardware scan code for a virtual key, cached.
+    ///
+    /// Sending <c>wScan = 0</c> is legal and works for ordinary applications, but not for the
+    /// shell's Alt+Tab switcher — it reads the scan code, so a virtual-key-only Alt press never
+    /// raises the switcher. The AutoHotkey build hit this too and worked around it by pressing Alt
+    /// as <c>SC038</c> rather than by name. Filling the scan code in for every key makes injected
+    /// input indistinguishable from the keyboard, which also helps the apps and games that ignore
+    /// virtual-key-only input.
+    /// </summary>
+    static ushort ScanCode(int vk)
+    {
+        if ((uint)vk > 0xFF) return 0;
+
+        var cached = ScanCodes[vk];
+        if (cached != 0) return cached;
+
+        var scan = (ushort)Win32.MapVirtualKeyW((uint)vk, Win32.MAPVK_VK_TO_VSC);
+        ScanCodes[vk] = scan;
+        return scan;
+    }
+
+    static readonly ushort[] ScanCodes = new ushort[256];
 
     /// <summary>True while any of the physical keys the remapper tracks is actually down.</summary>
     public static bool IsPhysicallyDown(int vk) => (Win32.GetAsyncKeyState(vk) & 0x8000) != 0;

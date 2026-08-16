@@ -88,10 +88,20 @@ sealed class MacKeyboardApp : ApplicationContext
         _tray = new TrayIcon(
             new TrayActions(TogglePause, ReleaseStuckKeys, ReloadConfig, OpenConfig, OpenLog, Quit),
             _log is not null);
+        _tray.SetStatus(Status());
 
         if (_config.ShowNotification)
-            _tray.Notify("MacKeyboard", $"Mac key bindings active — {_remapper.BindingCount} bindings.");
+            _tray.Notify("MacKeyboard", $"{Status()} — {_remapper.BindingCount} bindings.");
     }
+
+    /// <summary>
+    /// Reported in the tray so the live configuration is visible. An unbound chord falls through to
+    /// Windows and does something unrelated — ⌥⌘← becomes Win+Ctrl+← and switches virtual desktop —
+    /// so "which preset is loaded" is not a question the keyboard can answer.
+    /// </summary>
+    string Status() => _config.EnableRectangle
+        ? $"Rectangle preset: {_config.Preset}"
+        : "window management off";
 
     Remapper NewRemapper() => new(_config.ToBindingOptions())
     {
@@ -245,7 +255,9 @@ sealed class MacKeyboardApp : ApplicationContext
         ReleaseStuckKeys();
         _config = AppConfig.Load();
         _remapper = NewRemapper();
-        _tray.Notify("MacKeyboard", $"Config reloaded — {_remapper.BindingCount} bindings.");
+
+        _tray.SetStatus(Status());
+        _tray.Notify("Config reloaded", $"{Status()} — {_remapper.BindingCount} bindings.");
     }
 
     void OpenConfig()

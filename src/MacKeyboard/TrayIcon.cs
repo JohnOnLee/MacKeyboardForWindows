@@ -11,11 +11,20 @@ sealed record TrayActions(
 sealed class TrayIcon : IDisposable
 {
     readonly NotifyIcon _icon;
+    readonly ToolStripMenuItem _header;
     readonly ToolStripMenuItem _pause;
     readonly ToolStripMenuItem _startup;
 
+    string _status = "";
+    bool _paused;
+
     public TrayIcon(TrayActions actions, bool logEnabled)
     {
+        // Which preset is live is not something you can tell by pressing keys — an unbound chord
+        // just falls through to Windows and does something unrelated. Showing it here turns
+        // "did my config edit take?" into a glance.
+        _header = new ToolStripMenuItem("MacKeyboard") { Enabled = false };
+
         _pause = new ToolStripMenuItem("Pause", null, (_, _) => actions.TogglePause());
 
         _startup = new ToolStripMenuItem("Start with Windows", null, (_, _) => ToggleStartup())
@@ -24,7 +33,7 @@ sealed class TrayIcon : IDisposable
         };
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add(new ToolStripMenuItem("MacKeyboard") { Enabled = false });
+        menu.Items.Add(_header);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_pause);
         menu.Items.Add(new ToolStripMenuItem("Release stuck keys", null, (_, _) => actions.ReleaseStuckKeys()));
@@ -48,10 +57,31 @@ sealed class TrayIcon : IDisposable
         _icon.DoubleClick += (_, _) => actions.ReleaseStuckKeys();
     }
 
+    /// <summary>What the program is currently doing, e.g. "Rectangle preset: Spectacle".</summary>
+    public void SetStatus(string status)
+    {
+        _status = status;
+        Refresh();
+    }
+
     public void SetPaused(bool paused)
     {
+        _paused = paused;
         _pause.Text = paused ? "Resume" : "Pause";
-        _icon.Text = paused ? "MacKeyboard (paused)" : "MacKeyboard";
+        Refresh();
+    }
+
+    void Refresh()
+    {
+        var text = _paused
+            ? "paused"
+            : _status.Length == 0 ? "running" : _status;
+
+        _header.Text = $"MacKeyboard — {text}";
+
+        // NotifyIcon.Text throws above 63 characters.
+        var tip = $"MacKeyboard — {text}";
+        _icon.Text = tip.Length <= 63 ? tip : tip[..63];
     }
 
     public void Notify(string title, string text)

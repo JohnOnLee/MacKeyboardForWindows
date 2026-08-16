@@ -77,6 +77,19 @@ Add ⇧ to any of the above to select.
 
 ## Window management (Rectangle)
 
+> **Which key is which.** Shortcuts below name the keys as they are printed on the Mac keyboard,
+> and they match on the physical key — not on what it has been remapped to. The same key has three
+> names depending on who is talking, which is worth having in front of you:
+>
+> | Printed on the key | What Windows calls it | What this program makes it do |
+> |---|---|---|
+> | ⌃ `control` | Ctrl | Alt |
+> | ⌥ `option` | Alt | Win |
+> | ⌘ `command` | Win | Ctrl |
+>
+> So the Spectacle preset's ⌥⌘ is `option`+`command` — which Windows reports as Alt+Win, and which
+> behaves as Win+Ctrl once remapped. All three describe the same two keys.
+
 Two presets, chosen with `Preset=` in `config.ini`.
 
 | Action | `Preset=Rectangle` | `Preset=Spectacle` |
@@ -95,7 +108,8 @@ Two presets, chosen with `Preset=` in `config.ini`.
 | Next / previous display | ⌃⌥⌘→ / ⌃⌥⌘← | ⌃⌥⌘→ / ⌃⌥⌘← |
 
 **Press a half command repeatedly to cycle 1/2 → 2/3 → 1/3**, exactly as Rectangle does. The cycle
-restarts if you move the window in between.
+restarts if you move the window in between. If a half command appears to be resizing rather than
+snapping, that is the cycle — press it a third time to come back round to half.
 
 Windows Snap is not used for any of this — it has no top/bottom half, its quarters fight with Snap
 Assist, and it has no thirds, centering or undo. Frames are computed and applied directly.
