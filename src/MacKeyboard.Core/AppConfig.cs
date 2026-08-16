@@ -1,12 +1,10 @@
-using MacKeyboard.Core;
-
-namespace MacKeyboard;
+namespace MacKeyboard.Core;
 
 /// <summary>
 /// <c>config.ini</c>, kept next to the executable. Section and key names carry over from the
 /// AutoHotkey build so an existing file keeps working.
 /// </summary>
-sealed class AppConfig
+public sealed class AppConfig
 {
     public bool ShowNotification { get; private init; } = true;
     public bool Log { get; private init; }
@@ -31,11 +29,13 @@ sealed class AppConfig
 
     public static string FilePath => System.IO.Path.Combine(AppContext.BaseDirectory, "config.ini");
 
-    public static AppConfig Load()
-    {
-        if (!File.Exists(FilePath)) return new AppConfig();
+    public static AppConfig Load() =>
+        File.Exists(FilePath) ? FromLines(File.ReadAllLines(FilePath)) : new AppConfig();
 
-        var ini = Parse(File.ReadAllLines(FilePath));
+    /// <summary>Parsing split from reading so it can be tested without a filesystem.</summary>
+    public static AppConfig FromLines(IEnumerable<string> lines)
+    {
+        var ini = Parse(lines);
 
         return new AppConfig
         {
@@ -110,7 +110,8 @@ sealed class AppConfig
             var v => v.Equals("true", StringComparison.OrdinalIgnoreCase) || v == "1",
         };
 
-    const string Template = """
+    /// <summary>The file written on first run.</summary>
+    public const string Template = """
         [General]
         ; Show a notification when MacKeyboard starts
         ShowNotification=true

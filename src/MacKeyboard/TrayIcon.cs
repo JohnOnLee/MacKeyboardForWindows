@@ -18,7 +18,7 @@ sealed class TrayIcon : IDisposable
     string _status = "";
     bool _paused;
 
-    public TrayIcon(TrayActions actions, bool logEnabled)
+    public TrayIcon(TrayActions actions, bool logEnabled, string configPath)
     {
         // Which preset is live is not something you can tell by pressing keys — an unbound chord
         // just falls through to Windows and does something unrelated. Showing it here turns
@@ -39,7 +39,14 @@ sealed class TrayIcon : IDisposable
         menu.Items.Add(new ToolStripMenuItem("Release stuck keys", null, (_, _) => actions.ReleaseStuckKeys()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Reload config", null, (_, _) => actions.ReloadConfig()));
-        menu.Items.Add(new ToolStripMenuItem("Open config…", null, (_, _) => actions.OpenConfig()));
+
+        // The exact file being read, spelled out. Editing a config.ini that belongs to a different
+        // copy of the exe is invisible otherwise — the settings simply appear not to work.
+        menu.Items.Add(new ToolStripMenuItem("Open config…", null, (_, _) => actions.OpenConfig())
+        {
+            ToolTipText = configPath,
+        });
+        menu.Items.Add(new ToolStripMenuItem(Shorten(configPath)) { Enabled = false });
         if (logEnabled)
             menu.Items.Add(new ToolStripMenuItem("Open log…", null, (_, _) => actions.OpenLog()));
         menu.Items.Add(_startup);
@@ -90,6 +97,10 @@ sealed class TrayIcon : IDisposable
         _icon.BalloonTipText = text;
         _icon.ShowBalloonTip(3000);
     }
+
+    /// <summary>Keeps a long path readable in a menu by dropping the middle of it.</summary>
+    static string Shorten(string path, int max = 52) =>
+        path.Length <= max ? path : $"{path[..(max / 2 - 2)]}…{path[^(max / 2 - 1)..]}";
 
     void ToggleStartup()
     {

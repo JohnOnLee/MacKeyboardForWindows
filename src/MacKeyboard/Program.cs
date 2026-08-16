@@ -13,9 +13,21 @@ static class Program
     static void Main(string[] args)
     {
         using var single = new Mutex(true, @"Local\MacKeyboardForWindows", out var isFirst);
-        if (!isFirst) return;
 
         ApplicationConfiguration.Initialize();
+
+        if (!isFirst)
+        {
+            // Exiting quietly here is a trap: "Start with Windows" launches a copy from wherever it
+            // was registered, so double-clicking a newer build looks like it did nothing, and the
+            // old one keeps running against its own config.ini next to it.
+            MessageBox.Show(
+                "MacKeyboard is already running.\n\n" +
+                "It may be an older copy started at login — check the tray icon (it can be hidden " +
+                "under the ^ arrow) and use Exit there before starting this one.",
+                "MacKeyboard", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         using var app = new MacKeyboardApp(args);
         Application.Run(app);
     }
@@ -87,8 +99,11 @@ sealed class MacKeyboardApp : ApplicationContext
 
         _tray = new TrayIcon(
             new TrayActions(TogglePause, ReleaseStuckKeys, ReloadConfig, OpenConfig, OpenLog, Quit),
-            _log is not null);
+            _log is not null,
+            AppConfig.FilePath);
         _tray.SetStatus(Status());
+
+        _log?.Write($"config: {AppConfig.FilePath} -> {Status()}, {_remapper.BindingCount} bindings");
 
         if (_config.ShowNotification)
             _tray.Notify("MacKeyboard", $"{Status()} — {_remapper.BindingCount} bindings.");
@@ -149,7 +164,9 @@ sealed class MacKeyboardApp : ApplicationContext
         var stranded = _remapper.Reconcile(InputSender.IsPhysicallyDown);
         if (stranded.Count > 0)
         {
-            _log?.Write($"reconciler released {stranded.Count} stranded key(s)");
+            // Named, because the reconciler firing during a ⌘Tab session would tear the switcher
+            // down and look like ⌘Tab simply not working.
+            _log?.Write($"reconciler released {string.Join(" ", stranded)}");
             _sender.Execute(stranded);
         }
 
