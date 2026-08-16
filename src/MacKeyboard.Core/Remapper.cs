@@ -6,12 +6,17 @@ namespace MacKeyboard.Core;
 /// The design exists to make a stuck key structurally impossible, and there are two ways one can
 /// happen. Both are handled here rather than at the call sites.
 ///
-/// <b>1. A modifier we pressed is never released.</b> Answered by lazy emission: pressing a
-/// physical modifier emits nothing. Only when a following key misses the binding table do we
-/// "flush" — emit the mapped modifier down and hold it. A binding that hits (⌘Q, ⌘←, …) emits a
-/// self-contained <see cref="Tap"/> instead, so the modifier is never pressed and there is nothing
-/// to leave behind. The old AutoHotkey build leaked exactly here: it held Ctrl eagerly, then lifted
-/// and re-pressed it around every shortcut, and releasing ⌘ inside that window lost the up event.
+/// <b>1. A modifier we pressed is never released.</b> The rule is that a mapped modifier is down
+/// exactly while its physical key is down, and every path out of that state is the same one line.
+/// A binding that hits (⌘Q, ⌘←, …) first takes off whatever is held and then emits a self-contained
+/// <see cref="Tap"/>; it never re-presses, so there is no lift-and-restore window. The old
+/// AutoHotkey build leaked exactly there: it lifted Ctrl and re-pressed it around every shortcut,
+/// and releasing ⌘ inside that window lost the up event.
+///
+/// ⌥ and ⌃ are the one exception, and it is about side effects rather than correctness: they map to
+/// Win and Alt, whose lone taps open the Start menu and grab the menu bar. Those two are held back
+/// until a key actually needs them. ⇧ and ⌘ go down immediately — a mouse click never reaches this
+/// hook, so a modifier that is merely pending arrives at the click as if it were not held.
 ///
 /// <b>2. A key the application saw go down never gets its up.</b> Every non-modifier key is in one
 /// of two states — passed through (the app owns it) or captured by a binding (we own it) — and it
@@ -23,11 +28,19 @@ namespace MacKeyboard.Core;
 /// </summary>
 public sealed class Remapper
 {
-    sealed class Slot(int physicalVk, MacMods mod)
+    sealed class Slot(int physicalVk, MacMods mod, bool eager)
     {
         public readonly int PhysicalVk = physicalVk;
         public readonly int MappedVk = MacModsExtensions.ToMappedVk(physicalVk);
         public readonly MacMods Mod = mod;
+
+        /// <summary>
+        /// Press this one for real the moment it goes down, rather than waiting for a key to need
+        /// it. Set only where a lone tap of the mapped key does nothing: ⇧ stays ⇧, and ⌘ becomes
+        /// Ctrl. ⌥ becomes Win, whose lone tap opens the Start menu, and ⌃ becomes Alt, whose lone
+        /// tap grabs the menu bar — those two have to stay lazy.
+        /// </summary>
+        public readonly bool Eager = eager;
 
         /// <summary>The physical key is held.</summary>
         public bool Down;
@@ -38,14 +51,14 @@ public sealed class Remapper
 
     readonly Slot[] _slots =
     [
-        new(Vk.LWin, MacMods.Command),
-        new(Vk.RWin, MacMods.Command),
-        new(Vk.LMenu, MacMods.Option),
-        new(Vk.RMenu, MacMods.Option),
-        new(Vk.LControl, MacMods.Control),
-        new(Vk.RControl, MacMods.Control),
-        new(Vk.LShift, MacMods.Shift),
-        new(Vk.RShift, MacMods.Shift),
+        new(Vk.LWin, MacMods.Command, eager: true),
+        new(Vk.RWin, MacMods.Command, eager: true),
+        new(Vk.LMenu, MacMods.Option, eager: false),
+        new(Vk.RMenu, MacMods.Option, eager: false),
+        new(Vk.LControl, MacMods.Control, eager: false),
+        new(Vk.RControl, MacMods.Control, eager: false),
+        new(Vk.LShift, MacMods.Shift, eager: true),
+        new(Vk.RShift, MacMods.Shift, eager: true),
     ];
 
     /// <summary>Synthetic keys we are currently holding down: mapped VK → the physical VK that owns it.</summary>
@@ -97,10 +110,17 @@ public sealed class Remapper
     {
         if (e.IsDown)
         {
-            // Emit nothing — this is the lazy half of the design. Auto-repeat lands here too and
-            // is equally ignored; modifiers have no use for repeat.
             slot.Down = true;
-            return new RemapResult(true, []);
+
+            // Auto-repeat lands here too; modifiers have no use for it.
+            if (!slot.Eager || slot.Flushed) return new RemapResult(true, []);
+
+            // Held means held. A mouse click never reaches this hook, so a modifier that is only
+            // pending would arrive at the click as though it were not held at all — which is what
+            // broke Shift+click and ⌘+click.
+            _held[slot.MappedVk] = slot.PhysicalVk;
+            slot.Flushed = true;
+            return new RemapResult(true, [new Down(slot.MappedVk, slot.PhysicalVk)]);
         }
 
         slot.Down = false;

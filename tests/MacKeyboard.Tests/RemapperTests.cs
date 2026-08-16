@@ -8,7 +8,7 @@ public class RemapperTests
     // ------------------------------------------------------------------ the sequences that leak today
 
     [Fact]
-    public void CommandQ_SendsAltF4_AndNeverPressesCtrlAtAll()
+    public void CommandQ_SendsAltF4_WithCtrlOffFirst_AndLeavesNothingHeld()
     {
         var h = new Harness();
         h.Press(Vk.LWin);
@@ -16,13 +16,12 @@ public class RemapperTests
         h.Release(Vk.LWin);   // ⌘ released before Q — the ordering that strands Ctrl in the AHK build
         h.Release(Vk.Q);
 
-        Assert.Contains(h.Ops, o => o is Tap { Mods: WinMods.Alt, Vk: Vk.F4 });
-        Assert.DoesNotContain(h.Ops, o => o is Down);
+        AssertReleasedBefore(h, Vk.LControl, o => o is Tap { Mods: WinMods.Alt, Vk: Vk.F4 });
         Assert.Empty(h.Remapper.Held);
     }
 
     [Fact]
-    public void CommandLeft_SendsHome_AndHoldsNothing()
+    public void CommandLeft_SendsHome_WithCtrlOffFirst_AndLeavesNothingHeld()
     {
         var h = new Harness();
         h.Press(Vk.LWin);
@@ -30,8 +29,52 @@ public class RemapperTests
         h.Release(Vk.Left);
         h.Release(Vk.LWin);
 
-        Assert.Contains(h.Ops, o => o is Tap { Mods: WinMods.None, Vk: Vk.Home });
-        Assert.DoesNotContain(h.Ops, o => o is Down);
+        AssertReleasedBefore(h, Vk.LControl, o => o is Tap { Mods: WinMods.None, Vk: Vk.Home });
+        Assert.Empty(h.Remapper.Held);
+    }
+
+    // ------------------------------------------------------------------ modifiers held for the mouse
+
+    [Fact]
+    public void ShiftGoesDownTheMomentItIsHeld_SoShiftClickCarriesIt()
+    {
+        // A mouse click never reaches the keyboard hook. A modifier that is merely pending would
+        // therefore arrive at the click as though it were not held at all.
+        var h = new Harness();
+        h.Press(Vk.LShift);
+
+        Assert.Contains(h.Ops, o => o is Down { Vk: Vk.LShift });
+        Assert.Equal(Vk.LShift, h.Remapper.Held[Vk.LShift]);
+
+        h.Release(Vk.LShift);
+        Assert.Contains(h.Ops, o => o is Up { Vk: Vk.LShift });
+        Assert.Empty(h.Remapper.Held);
+    }
+
+    [Fact]
+    public void CommandGoesDownTheMomentItIsHeld_SoCommandClickCarriesCtrl()
+    {
+        var h = new Harness();
+        h.Press(Vk.LWin);
+
+        Assert.Equal(Vk.LWin, h.Remapper.Held[Vk.LControl]);
+
+        h.Release(Vk.LWin);
+        Assert.Empty(h.Remapper.Held);
+    }
+
+    [Fact]
+    public void OptionAndControlStayPending_SoALoneTapDoesNotOpenStartOrGrabTheMenuBar()
+    {
+        // ⌥ maps to Win and ⌃ to Alt. Pressing and releasing either with nothing in between is a
+        // lone tap of a key Windows reacts to on its own, so these two cannot go down eagerly.
+        var h = new Harness();
+        h.Press(Vk.LMenu);
+        h.Release(Vk.LMenu);
+        h.Press(Vk.LControl);
+        h.Release(Vk.LControl);
+
+        Assert.Empty(h.Ops);
         Assert.Empty(h.Remapper.Held);
     }
 
@@ -58,10 +101,9 @@ public class RemapperTests
     {
         var h = new Harness();
         h.Press(Vk.LWin);
-        Assert.Empty(h.Ops);                       // pressing ⌘ on its own emits nothing
+        Assert.Contains(h.Ops, o => o is Down { Vk: Vk.LControl, SourceVk: Vk.LWin });
 
         h.Press(Vk.C);
-        Assert.Contains(h.Ops, o => o is Down { Vk: Vk.LControl, SourceVk: Vk.LWin });
         Assert.Contains(h.PassedThrough, e => e.Vk == Vk.C);
 
         h.Release(Vk.C);
@@ -167,7 +209,9 @@ public class RemapperTests
         h.Press(Vk.Tab); h.Release(Vk.Tab);
         h.Press(Vk.A); h.Release(Vk.A);
 
-        Assert.DoesNotContain(h.Ops, o => o is Down { Vk: Vk.LControl });
+        // ⌘ put Ctrl down when it was pressed; opening the switcher has to take it off again
+        // before holding Alt, or the shell sees Ctrl+Alt+Tab.
+        AssertReleasedBefore(h, Vk.LControl, o => o is Down { Vk: Vk.LMenu });
         Assert.Single(h.Remapper.Held);            // only the session's Alt
 
         h.Release(Vk.LWin);
@@ -275,7 +319,24 @@ public class RemapperTests
         h.Press(Vk.Left);
 
         Assert.Contains(h.Ops, o => o is Run { Command: AppCommand.RectLeftHalf });
-        Assert.DoesNotContain(h.Ops, o => o is Down);   // never becomes Win+Ctrl+← (switch desktop)
+
+        // ⌥⌘← must never reach Windows as Win+Ctrl+←, which switches virtual desktop. ⌥ is
+        // pending so Win is never pressed at all, and the Ctrl that ⌘ put down comes off before
+        // the command runs.
+        Assert.DoesNotContain(h.Ops, o => o is Down { Vk: Vk.LWin });
+        AssertReleasedBefore(h, Vk.LControl, o => o is Run);
+        Assert.Empty(h.Remapper.Held);
+    }
+
+    /// <summary>Asserts <paramref name="vk"/> was released before the first op matching <paramref name="op"/>.</summary>
+    static void AssertReleasedBefore(Harness h, int vk, Func<OutputOp, bool> op)
+    {
+        var released = h.Ops.FindIndex(o => o is Up u && u.Vk == vk);
+        var target = h.Ops.FindIndex(o => op(o));
+
+        Assert.True(target >= 0, "the op under test was never emitted");
+        Assert.True(released >= 0 && released < target,
+            $"{vk:X2} was still held when it was emitted: {string.Join(" ", h.Ops)}");
     }
 
     [Fact]
