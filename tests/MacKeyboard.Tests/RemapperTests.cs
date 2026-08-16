@@ -308,16 +308,66 @@ public class RemapperTests
     // ------------------------------------------------------------------ recovery
 
     [Fact]
-    public void Reconcile_ReleasesAModifierWhosePhysicalKeyIsAlreadyGone()
+    public void AltTabSurvivesReconcileWhileCommandIsStillHeld()
+    {
+        // Seen in the field as:
+        //   down 5B eaten
+        //   down 09 eaten -> vA4(from 5B) [09]
+        //   reconciler released ^A4          <- 165 ms in, ⌘ still held
+        //   up   5B eaten                    <- ⌘ only released here
+        // The reconciler had asked the OS whether ⌘ was down. Windows does not record a key the
+        // hook suppressed, so the answer was no, and the switcher lost its Alt immediately.
+        var h = new Harness();
+        h.Press(Vk.LWin);
+        h.Press(Vk.Tab);
+        h.Release(Vk.Tab);
+
+        for (var tick = 0; tick < 10; tick++)
+            Assert.Empty(h.ReconcileAsWindowsAnswers());
+
+        Assert.True(h.Remapper.AltTabActive);
+        Assert.Equal(Vk.LWin, h.Remapper.Held[Vk.LMenu]);
+
+        h.Release(Vk.LWin);
+        Assert.Contains(h.Ops, o => o is Up { Vk: Vk.LMenu });
+        Assert.Empty(h.Remapper.Held);
+    }
+
+    [Fact]
+    public void Reconcile_DoesNotTrustTheOsAboutASuppressedModifier()
     {
         var h = new Harness();
         h.Press(Vk.LWin);
-        h.Press(Vk.C);                        // Ctrl is now held on ⌘'s behalf
-        h.LoseKeyUp(Vk.LWin);                 // the up event never arrives
+        h.Press(Vk.C);                        // Ctrl is held on ⌘'s behalf
 
-        var ops = h.Reconcile();
+        Assert.Empty(h.ReconcileAsWindowsAnswers());
+        Assert.Equal(Vk.LWin, h.Remapper.Held[Vk.LControl]);
+    }
 
-        Assert.Contains(ops, o => o is Up { Vk: Vk.LControl });
+    [Fact]
+    public void Reconcile_StillReleasesAPassedThroughKeyTheOsSaysIsUp()
+    {
+        // Passed-through keys are not suppressed, so Windows does record them and its answer is
+        // meaningful. This is the one case the reconciler can still settle on its own.
+        var h = new Harness();
+        h.Press(Vk.LWin);
+        h.Press(Vk.C);                        // 'c' itself goes through untouched
+        h.LoseKeyUp(Vk.C);
+
+        Assert.Contains(h.Reconcile(), o => o is Up { Vk: Vk.C });
+    }
+
+    [Fact]
+    public void AModifierWhoseReleaseWasNeverSeen_IsRecoveredByReleaseAll()
+    {
+        // With no second opinion available, this is the recovery path: the hook watchdog, the
+        // panic gesture and the tray all land here.
+        var h = new Harness();
+        h.Press(Vk.LWin);
+        h.Press(Vk.C);
+        h.LoseKeyUp(Vk.LWin);
+
+        Assert.Contains(h.ReleaseAll(), o => o is Up { Vk: Vk.LControl });
         Assert.Empty(h.Remapper.Held);
     }
 

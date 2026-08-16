@@ -53,6 +53,18 @@ sealed class Harness(BindingOptions? options = null)
         return ops;
     }
 
+    /// <summary>
+    /// Reconcile with the OS answering the way Windows really does: a key the hook suppressed is
+    /// never recorded, so <c>GetAsyncKeyState</c> reports every modifier as up however hard the
+    /// user is holding it, while passed-through keys are reported truthfully.
+    /// </summary>
+    public IReadOnlyList<OutputOp> ReconcileAsWindowsAnswers()
+    {
+        var ops = Remapper.Reconcile(vk => !Vk.IsModifier(vk) && _physical.Contains(vk));
+        Record(ops);
+        return ops;
+    }
+
     public IReadOnlyList<OutputOp> ReleaseAll()
     {
         var ops = Remapper.ReleaseAll();

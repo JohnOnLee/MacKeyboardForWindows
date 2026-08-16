@@ -249,11 +249,22 @@ public sealed class Remapper
     // ---------------------------------------------------------------- recovery
 
     /// <summary>
-    /// The self-healing net. Releases anything still held whose physical key is no longer down —
-    /// both modifiers we are holding and ordinary keys the application is holding. Covers hook
-    /// drops, releases eaten by UIPI, and any bug not anticipated here. Runs every 200 ms and is a
-    /// no-op while nothing is held.
+    /// The self-healing net: release anything still held whose physical key is no longer down.
+    ///
+    /// The two halves ask different authorities, and the difference is not cosmetic.
+    ///
+    /// For keys we <b>suppress</b> — every modifier — Windows never records the press at all, so
+    /// <c>GetAsyncKeyState</c> reports them as up the entire time the user is holding them. Only
+    /// the hook knows, because it sees the event before it is swallowed. Asking the OS here is what
+    /// tore the ⌘Tab session down 165 ms after it opened: the reconciler saw ⌘ as released while it
+    /// was still held, and dropped the Alt underneath the switcher.
+    ///
+    /// For keys we <b>pass through</b>, Windows does record them, and its answer is the trustworthy
+    /// one — it is the only thing that can notice an up we never received.
     /// </summary>
+    /// <param name="isPhysicallyDown">
+    /// The OS view. Consulted only for passed-through keys, where it is meaningful.
+    /// </param>
     public IReadOnlyList<OutputOp> Reconcile(Func<int, bool> isPhysicallyDown)
     {
         List<OutputOp>? ops = null;
@@ -263,12 +274,12 @@ public sealed class Remapper
             List<(int Mapped, int Source)>? stale = null;
             foreach (var (mappedVk, sourceVk) in _held)
             {
-                var alive = isPhysicallyDown(sourceVk);
+                var alive = IsSourceDown(sourceVk);
 
                 // The switcher survives on either ⌘, not just the one that opened it — otherwise
                 // holding both and releasing one would tear the session down mid-cycle.
                 if (!alive && _altTabActive && mappedVk == Vk.LMenu)
-                    alive = isPhysicallyDown(Vk.LWin) || isPhysicallyDown(Vk.RWin);
+                    alive = AnyDown(MacMods.Command);
 
                 if (alive) continue;
                 (stale ??= []).Add((mappedVk, sourceVk));
@@ -352,6 +363,18 @@ public sealed class Remapper
             slot.Flushed = false;
         }
     }
+
+    /// <summary>
+    /// Whether a physical modifier is held, according to the hook. This is the only reliable
+    /// answer for a key we suppress — see <see cref="Reconcile"/>.
+    /// </summary>
+    public bool IsSourceDown(int vk) => FindSlot(vk)?.Down ?? false;
+
+    /// <summary>
+    /// Both Shift keys held — the panic gesture. Answered from hook state for the same reason:
+    /// Shift is suppressed, so the OS would never report it and the gesture could never fire.
+    /// </summary>
+    public bool BothShiftsDown => IsSourceDown(Vk.LShift) && IsSourceDown(Vk.RShift);
 
     Slot? FindSlot(int vk)
     {

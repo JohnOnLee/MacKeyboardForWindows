@@ -48,25 +48,50 @@ public class LedgerInvariantTests
     [Theory]
     [InlineData(RectanglePreset.Rectangle)]
     [InlineData(RectanglePreset.Spectacle)]
-    public void WhenKeyUpsAreLostEntirely_TheReconcilerStillClearsEverything(RectanglePreset preset)
+    public void WhenKeyUpsAreLostEntirely_ReleaseAllClearsEverything(RectanglePreset preset)
     {
         // Simulates Windows dropping the hook mid-chord, or UIPI swallowing releases while an
-        // elevated window has focus: the ups simply never arrive. The 200 ms reconciler is the
-        // only thing standing between that and a keyboard the user has to physically re-press.
+        // elevated window has focus: the ups simply never arrive.
+        //
+        // The reconciler cannot settle this one. It could only notice by asking the OS, and the OS
+        // does not track keys the hook suppressed — asking anyway is what used to kill the ⌘Tab
+        // session. So recovery runs through ReleaseAll instead, which the hook watchdog, the panic
+        // gesture and the tray item all reach.
         for (var seed = 0; seed < 300; seed++)
         {
             var h = Fuzz(seed, preset, out var stillDown);
             foreach (var vk in stillDown) h.LoseKeyUp(vk);
 
-            h.Reconcile();
+            h.ReleaseAll();
 
             Assert.True(h.Remapper.Held.Count == 0,
-                $"seed {seed} ({preset}): reconcile left {Describe(h.Remapper.Held)} held");
-            Assert.False(h.Remapper.AltTabActive, $"seed {seed} ({preset}): alt-tab survived reconcile");
+                $"seed {seed} ({preset}): {Describe(h.Remapper.Held)} still held");
+            Assert.False(h.Remapper.AltTabActive, $"seed {seed} ({preset}): alt-tab survived");
 
             var stuck = h.KeysLeftDownInApp().ToArray();
             Assert.True(stuck.Length == 0,
-                $"seed {seed} ({preset}): after reconcile the app still thinks {Hex(stuck)} are held");
+                $"seed {seed} ({preset}): the app still thinks {Hex(stuck)} are held");
+        }
+    }
+
+    [Theory]
+    [InlineData(RectanglePreset.Rectangle)]
+    [InlineData(RectanglePreset.Spectacle)]
+    public void ReconcilingRepeatedlyNeverReleasesAKeyTheUserIsStillHolding(RectanglePreset preset)
+    {
+        // The OS reports every suppressed key as up, so a reconciler that believed it would strip
+        // modifiers out from under the user's fingers. Ticking must change nothing while keys are
+        // still held.
+        for (var seed = 0; seed < 300; seed++)
+        {
+            var h = Fuzz(seed, preset, out _);
+            var before = h.Remapper.Held.Count;
+
+            for (var tick = 0; tick < 5; tick++)
+                Assert.True(h.ReconcileAsWindowsAnswers().Count == 0,
+                    $"seed {seed} ({preset}): reconcile released a key that is still held");
+
+            Assert.Equal(before, h.Remapper.Held.Count);
         }
     }
 

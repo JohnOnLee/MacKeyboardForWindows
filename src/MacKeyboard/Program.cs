@@ -211,7 +211,9 @@ sealed class MacKeyboardApp : ApplicationContext
 
     void CheckPanicGesture()
     {
-        var both = InputSender.IsPhysicallyDown(Vk.LShift) && InputSender.IsPhysicallyDown(Vk.RShift);
+        // Hook state, not the OS: Shift is suppressed like every other modifier, so
+        // GetAsyncKeyState would report it up and the gesture could never fire.
+        var both = _remapper.BothShiftsDown;
         if (!both)
         {
             _bothShiftTicks = 0;
@@ -228,12 +230,17 @@ sealed class MacKeyboardApp : ApplicationContext
     {
         if (!_reinstallRequested && _hook.SinceLastEvent < IdleBeforeHookRefresh) return;
 
-        // Windows silently stops calling a low-level hook that overruns LowLevelHooksTimeout, and
-        // offers no way to ask whether that has happened. Reinstalling while the keyboard is idle
-        // costs nothing and bounds how long a silent drop can last.
-        if (_remapper.Held.Count > 0) return;
-
         _reinstallRequested = false;
+
+        // Windows silently stops calling a low-level hook that overruns LowLevelHooksTimeout, and
+        // offers no way to ask whether that has happened.
+        //
+        // This is also the only recovery for a modifier whose release we never saw. The reconciler
+        // cannot spot one: the OS does not track keys we suppress, so it has no second opinion to
+        // offer. So release everything before putting the hook back, rather than skipping the
+        // refresh whenever something is held — which was exactly backwards.
+        ReleaseStuckKeys();
+
         try
         {
             _hook.Reinstall();
