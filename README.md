@@ -139,8 +139,13 @@ If you catch one anyway, any of these clears it immediately:
 - Double-click the tray icon.
 - Tray → **Release stuck keys**.
 
-Then set `Log=true` in `config.ini`, reload, and reproduce it. `%LOCALAPPDATA%\MacKeyboard\input.log`
-records every key pressed and every key emitted, so the unmatched press is visible directly.
+To diagnose one, tick **Write log** in the tray, reproduce it, then **Open log…**. Every key
+pressed and every key emitted is recorded, so the unmatched press is visible directly. (`Log=true`
+in `config.ini` turns it on from startup instead.)
+
+**A setting seems to have no effect.** The tray menu shows the preset that is loaded and the exact
+`config.ini` being read — check both before looking further. If the file you edited is not the one
+listed, an older copy of the exe is running; a second instance says so rather than starting.
 
 **Nothing is being remapped.** Another tool may own the keyboard first (PowerToys Keyboard Manager,
 a vendor utility). Turn one of them off. If the program was started without administrator rights,

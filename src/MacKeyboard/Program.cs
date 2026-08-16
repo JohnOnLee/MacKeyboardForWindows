@@ -52,7 +52,9 @@ sealed class MacKeyboardApp : ApplicationContext
 
     static readonly TimeSpan IdleBeforeHookRefresh = TimeSpan.FromSeconds(60);
 
-    readonly Logger? _log;
+    // Not readonly: logging can be switched on from the tray while the program is running.
+    Logger? _log;
+
     readonly InputSender _sender;
     readonly RectangleEngine _rectangle;
     readonly WindowCycler _cycler;
@@ -75,17 +77,12 @@ sealed class MacKeyboardApp : ApplicationContext
         AppConfig.WriteDefaultIfMissing();
         _config = AppConfig.Load();
 
-        if (_config.Log || args.Contains("--log", StringComparer.OrdinalIgnoreCase))
-            _log = new Logger();
-
-        Action<string>? write = _log is null ? null : _log.Write;
-
         _remapper = NewRemapper();
-        _sender = new InputSender(write);
-        _rectangle = new RectangleEngine(write);
-        _cycler = new WindowCycler(write);
+        _sender = new InputSender(Log);
+        _rectangle = new RectangleEngine(Log);
+        _cycler = new WindowCycler(Log);
 
-        _hook = new KeyboardHook(OnKey, write);
+        _hook = new KeyboardHook(OnKey, Log);
         _hook.Install();
 
         new Thread(WorkerLoop) { IsBackground = true, Name = "MacKeyboard.Worker" }.Start();
@@ -98,15 +95,53 @@ sealed class MacKeyboardApp : ApplicationContext
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         _tray = new TrayIcon(
-            new TrayActions(TogglePause, ReleaseStuckKeys, ReloadConfig, OpenConfig, OpenLog, Quit),
-            _log is not null,
+            new TrayActions(
+                TogglePause, ReleaseStuckKeys, ToggleLogging, ReloadConfig, OpenConfig, OpenLog, Quit),
             AppConfig.FilePath);
         _tray.SetStatus(Status());
 
-        _log?.Write($"config: {AppConfig.FilePath} -> {Status()}, {_remapper.BindingCount} bindings");
+        SetLogging(_config.Log || args.Contains("--log", StringComparer.OrdinalIgnoreCase));
 
         if (_config.ShowNotification)
             _tray.Notify("MacKeyboard", $"{Status()} — {_remapper.BindingCount} bindings.");
+    }
+
+    // ---------------------------------------------------------------- logging
+
+    /// <summary>
+    /// The sink handed to every component at construction. It reads <see cref="_log"/> on each call
+    /// rather than capturing it, so switching logging on later reaches all of them without
+    /// rebuilding anything.
+    /// </summary>
+    void Log(string message) => _log?.Write(message);
+
+    void SetLogging(bool on)
+    {
+        if (on != (_log is not null))
+        {
+            if (on)
+            {
+                _log = new Logger();
+                _log.Write($"config: {AppConfig.FilePath} -> {Status()}, {_remapper.BindingCount} bindings");
+            }
+            else
+            {
+                var previous = _log;
+                _log = null;
+                previous?.Dispose();
+            }
+        }
+
+        _tray.SetLogging(on);
+    }
+
+    void ToggleLogging()
+    {
+        SetLogging(_log is null);
+
+        _tray.Notify("MacKeyboard", _log is not null
+            ? "Logging every key event. Reproduce the problem, then use “Open log…”."
+            : "Logging off.");
     }
 
     /// <summary>
@@ -273,6 +308,10 @@ sealed class MacKeyboardApp : ApplicationContext
         _config = AppConfig.Load();
         _remapper = NewRemapper();
 
+        // The file can switch logging on, but never off — otherwise a reload would silently undo
+        // the tray toggle mid-diagnosis.
+        if (_config.Log) SetLogging(true);
+
         _tray.SetStatus(Status());
         _tray.Notify("Config reloaded", $"{Status()} — {_remapper.BindingCount} bindings.");
     }
@@ -285,7 +324,13 @@ sealed class MacKeyboardApp : ApplicationContext
 
     void OpenLog()
     {
-        if (_log is not null) Open(_log.FilePath);
+        if (_log is null)
+        {
+            _tray.Notify("MacKeyboard", "Switch on “Write log” first, then reproduce the problem.");
+            return;
+        }
+
+        Open(_log.FilePath);
     }
 
     static void Open(string path)
